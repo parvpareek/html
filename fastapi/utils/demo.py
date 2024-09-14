@@ -1,33 +1,18 @@
 import requests
-import json
 
-def make_post_request():
-    url = "http://127.0.0.1:8000/create_graph"
+def get_section_content(section_id):
+    url = f"http://localhost:8000/get_section_content/{section_id}"
+    response = requests.get(url)
     
-    import os
-    
-    # Assuming the PDF file is in the same directory as this script
-    pdf_file_path = "../dox/paper.pdf"
-    file_name = pdf_file_path[:-10]
-    # Create the payload
-    payload = {
-        "file_name": file_name,
-        "file_path": pdf_file_path
-    }
-    # Convert payload to JSON
-    json_payload = json.dumps(payload)
+    if response.status_code == 200:
+        return response.json()
+    else:
+        print(f"Error: {response.status_code}")
+        print(response.text)
+        return None
 
-    
-    headers = {
-        "Content-Type": "application/json"
-    }
-    
-    try:
-        response = requests.post(url, json_payload,headers=headers)
-        response.raise_for_status()
-        print("Response:", response.json())
-    except requests.exceptions.RequestException as e:
-        print("Error occurred:", e)
-
-if __name__ == "__main__":
-    make_post_request()
+# Example usage
+section_id = "827a4c4b88b8117e7d9f8b38e3b1f54e|121|4f7c5b74b16fc695333aa8aac7d5f6d0"
+result = get_section_content(section_id)
+if result:
+    print(result)

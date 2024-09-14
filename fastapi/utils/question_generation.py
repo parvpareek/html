@@ -3,7 +3,7 @@ class QuestionGen():
     def __init__(self, api_key: str):
         self.api_key = api_key
         
-    def get_questions(context):
+    def get_questions(self, context):
         
         import google.generativeai as genai
 
@@ -15,12 +15,19 @@ class QuestionGen():
 
         # Create the prompt
         prompt = f"""
-        Given the following context, generate 3 relevant questions:
+        
+        You are an experienced instructor.
+        
+        The following are the revised Bloom's skill levels and their explanation:
 
-        Context:
-        {context}
+        3. Skill: Apply, Explanation: Carry out or use a procedure in a given situation
+        4. Skill: Analyze, Explanation: Break material into foundational parts and determine how parts relate to one another and the overall structure or purpose
+        5. Skill:Evaluate, Explanation: Make judgments based on criteria and standards
+        6. Skill: Create, Explanation: Put elements together to form a coherent whole; reorganize into a new pattern or structure
 
-        Please provide 3 questions that can be answered based on the information in the context.
+        You are supposed to create 2 question corresponding to each level in revised Bloom's taxonomy for the topic. 
+        These questions are created to evaluate students on a range of cognitive skills, from basic knowledge to critical thinking and problem-solving.
+
         """
 
         # Generate content
@@ -28,4 +35,4 @@ class QuestionGen():
 
         # Extract and return the generated questions
         questions = response.text.strip().split('\n')
-        return questions[:3]  # Ensure we return exactly 3 questions
+        return questions

@@ -3,12 +3,14 @@ from fastapi import File, UploadFile
 from fastapi.responses import JSONResponse
 import uuid
 from pydantic import BaseModel
+from rag import RAGPipeline
 from typing import Optional
-from utils.content_extraction import ContentExtractor
-from utils.insert_graph import InsertDoc
-from utils.question_generation import QuestionGen
+from content_extraction import ContentExtractor
+from insert_graph import InsertDoc
+from question_generation import QuestionGen
 from neo4j import GraphDatabase
 import asyncio
+import google.generativeai import GenerativeModel
 
 import ngrok
 import os
@@ -26,6 +28,8 @@ GOOGLE_API = os.getenv("GOOGLE_API")  # Default to "neo4j" if not specified
 ngrok_token = os.getenv("NGROK_AUTH_TOKEN")
 llmsherpa_api_url = "http://127.0.0.1:5010/api/parseDocument?renderFormat=all&useNewIndentParser=true"
 # Validate that required environment variables are set
+
+rag = RAGPipeline(NEO4J_URL, NEO4J_USER, NEO4J_PASSWORD, NEO4J_DATABASE)
 
 app = FastAPI()
 qg = QuestionGen(GOOGLE_API)
@@ -48,13 +52,10 @@ if not all([NEO4J_URL, NEO4J_USER, NEO4J_PASSWORD]):
 if not ngrok_token:
     raise ValueError("NGROK_AUTH_TOKEN is not set in the environment variables")
 # Set up ngrok
-class UploadPdfRequest(BaseModel):
-    file: UploadFile = File(...)
-
 @app.post("/upload_pdf")
-async def upload_pdf(request: UploadPdfRequest):
+async def upload_pdf(file: UploadFile = File(...)):
     try:
-        file = request.file
+        
         content = await file.read()
 
         # Check if the uploaded file is a PDF
@@ -120,7 +121,7 @@ async def get_section_content(section_id: str):
         # Query to fetch chunk sentences for the given section_id
         query = """
         MATCH (c:Chunk {key: $section_id})
-        RETURN c.sentences AS sentences
+        RETURN c.text AS sentences
         """
 
         with driver.session() as session:
@@ -152,6 +153,57 @@ async def get_section_content(section_id: str):
         if driver:
             driver.close()
             
+            
+@app.post("/rag_pipeline")
+async def rag_pipeline(payload: dict):
+    try:
+        # Extract the required strings from the payload
+        question = payload.get("question")
+        answer = payload.get("answer")
+
+        # Validate that all required fields are present
+        if not all([question, answer]):
+            raise HTTPException(status_code=400, detail="Missing required fields in payload")
+
+        # Initialize RAG pipeline
+        rag = RAGPipeline(NEO4J_URL, NEO4J_USER, NEO4J_PASSWORD, NEO4J_DATABASE)
+        
+        # Retrieve chunks and generate answer
+        result = rag.process(question, answer)
+        
+        return JSONResponse(content=result)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/generate_advanced_questions")
+async def generate_advanced_questions():
+    try:
+        # Initialize the GenerativeModel
+        model = GenerativeModel('gemini-pro')
+
+        # Prompt for generating questions
+        prompt = """
+        Generate 4 questions about mitochondria and the cell, focusing on Bloom's Taxonomy levels 4 (Analysis) and 5 (Evaluation). 
+        The questions should require students to:
+        1. Analyze the relationship between mitochondrial function and cellular energy production.
+        2. Evaluate the impact of mitochondrial dysfunction on overall cell health.
+        3. Compare and contrast mitochondrial DNA with nuclear DNA.
+        4. Assess the role of mitochondria in cellular aging theories.
+
+        Format the response as a JSON array of strings, with each string being a question.
+        """
+
+        # Generate content
+        response = model.generate_content(prompt)
+
+        # Parse the response into a list of questions
+        questions = eval(response.text)
+
+        return JSONResponse(content={"questions": questions})
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
             
 if __name__ == "__main__":
     import uvicorn
